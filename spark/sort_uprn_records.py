@@ -10,7 +10,7 @@ APP_NAME = "Sort UPRN Records"
 SCHEMA_FILE = 'schema/addressbase_records.yml'
 
 # RECORD_TYPES_TO_SORT = ['Organisation']
-RECORD_TYPE_TO_SORT = 'Organisation'
+RECORD_TYPE_TO_SORT = '24'
 
 
 class UPRNRecordSort:
@@ -26,19 +26,19 @@ class UPRNRecordSort:
         return StructType(fields)
 
     def run(self):
-        bplu_schema = self.get_schema('21')
+        ab_schema = self.get_schema(RECORD_TYPE_TO_SORT)
+        record_type_name = self.schema_data[RECORD_TYPE_TO_SORT]['name']
 
-        bplu_file = self.s3_root + "/records/Addressbase_{0}.csv".format(RECORD_TYPE_TO_SORT)
-
-        bplu_df = self.sqlContext.read.format('com.databricks.spark.csv').schema(bplu_schema).load(bplu_file)
+        ab_file = self.s3_root + "/records/Addressbase_{0}.csv".format(record_type_name)
+        ab_df = self.sqlContext.read.format('com.databricks.spark.csv').schema(ab_schema).load(ab_file)
 
         # Always sort by UPRN as that is the constant key across all property record types
-        # bplu_df_sorted = self.sqlContext.createDataFrame(bplu_df.take(200000))
-        # bplu_df_sorted = bplu_df_sorted.sort('UPRN')
-        bplu_df_sorted = bplu_df.sort('UPRN')
-        bplu_df_sorted.show()
+        # ab_df_sorted = self.sqlContext.createDataFrame(ab_df.take(200000))
+        # ab_df_sorted = ab_df_sorted.sort('UPRN')
+        ab_df_sorted = ab_df.sort('UPRN')
+        ab_df_sorted.show()
 
-        bplu_df_sorted.write.format('com.databricks.spark.csv').save(self.s3_root + "/sorted-records/Addressbase_{0}".format(RECORD_TYPE_TO_SORT))
+        ab_df_sorted.write.format('com.databricks.spark.csv').save(self.s3_root + "/sorted-records/Addressbase_{0}".format(record_type_name))
 
 
 
