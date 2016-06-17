@@ -1,26 +1,33 @@
+import csv
 import logging
 import luigi
+import luigi.s3
+import operator
 import os
 from os import listdir
 from os.path import isfile, join
 import yaml
 
 
+USRN_INDEX = 3
+UPRN_INDEX = 3
 RESULTS_COUNT_DIR = 'results/count/'
 
 
 class addressbase(luigi.Config):
     directory = luigi.Parameter()
+    merge_dest = luigi.Parameter()
     schema_file = luigi.Parameter()
     location_records_filter = luigi.Parameter()
     include_headers = luigi.BoolParameter(default=False)
 
 
-""" A source Addressbase file, either a CSV or ZIP file.
-
-It is assumed to already exist.
-"""
 class AddressbaseFile(luigi.ExternalTask):
+    """ A source Addressbase file, either a CSV or ZIP file.
+
+    It is assumed to already exist.
+    """
+
     file_in = luigi.Parameter()
 
     def output(self):
@@ -29,6 +36,8 @@ class AddressbaseFile(luigi.ExternalTask):
         else:
             return luigi.LocalTarget(self.file_in, format=luigi.format.Gzip)
 
+
+#------------------------------------------------------------------------------
 
 class CountRecordsTask(luigi.Task):
     file_in = luigi.Parameter()
@@ -54,11 +63,12 @@ class CountRecordsTask(luigi.Task):
             out.write(yaml.dump(ids, default_flow_style=False))
 
 
-""" Creates a manifest of the Addressbase files.
-
-Lists all the files and how many record types are in each one.
-"""
 class CountAllRecordsTask(luigi.Task):
+    """ Creates a manifest of the Addressbase files.
+
+    Lists all the files and how many record types are in each one.
+    """
+
     directory = luigi.Parameter()
 
     def requires(self):
@@ -81,6 +91,7 @@ class CountAllRecordsTask(luigi.Task):
             out.write(yaml.dump(manifest, default_flow_style=False))
 
 
+#------------------------------------------------------------------------------
 
 class SplitRecordsTask(luigi.Task):
     directory = luigi.Parameter()
@@ -137,8 +148,11 @@ class SplitAllRecordsTask(luigi.Task):
                     yield SplitRecordsTask(directory=self.directory, config=config)
 
 
+#------------------------------------------------------------------------------
 
 class MergeRecordsTask(luigi.Task):
+    """ Merges records of a single type. """
+
     schema_file = luigi.Parameter(default=addressbase().schema_file)
     directory = luigi.Parameter(default=addressbase().directory)
     dest = luigi.Parameter()
@@ -200,6 +214,7 @@ class MergeRecordsTask(luigi.Task):
             # self.addressbase_inputs.append(target)
         self.create_combined_output()
 
+
 class MergeAllRecordsTask(luigi.Task):
     directory = luigi.Parameter(default=addressbase().directory)
     schema_file = luigi.Parameter(default=addressbase().schema_file)
@@ -216,22 +231,149 @@ class MergeAllRecordsTask(luigi.Task):
         for record_id in records_filter:
             yield MergeRecordsTask(record_id=record_id)
 
-            # config['schema'] = schema[record_id]
-            # config['dest_name'] = 'Addressbase_' + config['schema']['name'] + '.csv'
-            # yield MergeRecordsTask(config=config)
 
-        # for config in manifest:
-        #     # Remove unwanted counts that are not important
-        #     for num in ['10', '29', '99']:
-        #         del config['counts'][num]
+#------------------------------------------------------------------------------
 
-        #     # Most files have 1 key, a few have 2
-        #     for record_id in config['counts'].iterkeys():
-        #         # Only process the record types that are needed
-        #         if record_id in records_filter:
-        #             config['schema'] = schema[record_id]
-        #             config['dest_name'] = 'Addressbase_' + config['schema']['name'] + '.csv'
-        #             yield MergeRecordsTask(config=config)
+class AddressbaseRecordReader(object):
+    """"""
+
+    def __init__(self, s3client, s3_path):
+        self.s3client = s3client
+        self.s3_path = s3_path
+        self.files = [f for f in s3client.list(s3_path) if f.startswith('part')]
+        # print self.files
+        self.index = 0
+        self._get_next_file_data()
+        # self.csvdata =
+
+    def _get_next_file_data(self):
+        path = self.s3_path + '/' + self.files[self.index]
+        print 'Fetching next file: ' + path
+        key = self.s3client.get_key(path)
+        f = luigi.s3.ReadableS3File(key)
+        self.csvdata = f.read().splitlines()
+        self.index += 1
+
+    def next_row(self):
+        csvreader = csv.reader(self.csvdata)
+        for row in csvreader:
+            yield row
+
+def convert_uprn(uprn):
+    return long(float(uprn))
+
+class AddressbaseRecordQuery(AddressbaseRecordReader):
+    def __init__(self, s3client, s3_path):
+        super(AddressbaseRecordQuery, self).__init__(s3client, s3_path)
+        self.parse_csv_data()
+
+    def parse_csv_data(self):
+        self.data = list(csv.reader(self.csvdata))
+        # Get the UPRNs from the first and last lines in the CSV data and remove the decimal
+        self.start_uprn = convert_uprn(self.data[0][UPRN_INDEX])
+        self.end_uprn = convert_uprn(self.data[-1][UPRN_INDEX])
+        self.row_index = 0
+        print "start = {}, end = {}".format(self.start_uprn, self.end_uprn)
+
+
+    def rows_by_uprn(self, uprn):
+        while uprn > self.end_uprn:
+            self._get_next_file_data()
+            self.parse_csv_data()
+
+        while self.row_index < len(self.data) and uprn < convert_uprn(self.data[self.row_index][UPRN_INDEX]):
+            self.row_index += 1
+        matches = []
+        while self.row_index < len(self.data) and uprn == convert_uprn(self.data[self.row_index][UPRN_INDEX]):
+            matches.append(self.data[self.row_index])
+            self.row_index += 1
+        return matches
+
+
+TYPES_TO_COMBINE = ['LPI', 'DeliveryPointAddress', 'Organisation', 'Classification']
+
+class CombineByUPRNTask(luigi.Task):
+    directory = luigi.Parameter(default=addressbase().directory)
+    schema_file = luigi.Parameter(default=addressbase().schema_file)
+    location_records_filter = luigi.Parameter(default=addressbase().location_records_filter)
+    aws_access_key_id = luigi.Parameter()
+    aws_secret_access_key = luigi.Parameter()
+    host = luigi.Parameter()
+    s3_path = luigi.Parameter()
+
+    def run(self):
+        s3 = luigi.s3.S3Client(self.aws_access_key_id, self.aws_secret_access_key, host=self.host)
+        path = self.s3_path + '/sorted-records/Addressbase_BPLU'
+        blpu_reader = AddressbaseRecordReader(s3, path)
+
+        combine_queries = []
+        for combine_type in TYPES_TO_COMBINE:
+            path = self.s3_path + '/sorted-records/Addressbase_' + combine_type
+            combine_queries.append(AddressbaseRecordQuery(s3, path))
+
+        merge_dir = 'cache/merged_records'
+        if not os.path.exists(merge_dir):
+            os.makedirs(merge_dir)
+        out = open('cache/merged_records/0000.csv', 'w')
+        csvout = csv.writer(out)
+        count = 0
+        for row in blpu_reader.next_row():
+            uprn = convert_uprn(row[UPRN_INDEX])
+            row[UPRN_INDEX] = uprn
+            # print 'Combining UPRN: ' + str(uprn)
+            csvout.writerow(row)
+
+            # Add related rows of other record types
+            for query in combine_queries:
+                matches = query.rows_by_uprn(uprn)
+                for m in matches:
+                    m[UPRN_INDEX] = convert_uprn(m[UPRN_INDEX])
+                    csvout.writerow(m)
+
+            count += 1
+            if count > 1000000:
+                out.close()
+                break
+
+
+class CombineByUSRNTask(luigi.Task):
+    USRN_RECORD_TYPES = ['Street', 'StreetDescriptor']
+
+    directory = luigi.Parameter(default=addressbase().directory)
+    merge_dest = luigi.Parameter(default=addressbase().merge_dest)
+
+    def requires(self):
+        tasks = []
+        for record_type in CombineByUSRNTask.USRN_RECORD_TYPES:
+            dest_name = 'Addressbase_' + record_type + '.csv'
+            tasks.append(AddressbaseFile(join(self.merge_dest, dest_name)))
+        return tasks
+
+    def read_input(self, index):
+        lines = self.input()[index].open('r').read().splitlines()
+        data = list(csv.reader(lines))
+        return sorted(data, key=operator.itemgetter(3))
+
+    def run(self):
+        streets = self.read_input(0)
+        street_descriptors = self.read_input(1)
+
+        index = 0
+        file_count = 0
+        out = csv.writer(open(os.path.join('cache/grouped_records', '0000.csv'), 'w'))
+        for row in streets:
+            out.writerow(row)
+            while int(street_descriptors[index][USRN_INDEX]) < int(row[USRN_INDEX]):
+                index += 1
+            if street_descriptors[index][USRN_INDEX] == row[USRN_INDEX]:
+                out.writerow(street_descriptors[index])
+            index += 1
+            if index % 50000 == 0:
+                file_count += 1
+                out = csv.writer(open(os.path.join('cache/grouped_records', "000{}.csv".format(file_count)), 'w'))
+
+
+
 
 
 
