@@ -246,9 +246,10 @@ class UPRNRecordSortTask(luigi.contrib.spark.SparkSubmitTask):
 
     schema_file = luigi.Parameter(default=addressbase().schema_file)
     path_root = luigi.Parameter()
+    record_types = luigi.Parameter()
 
     def app_options(self):
-        return [self.path_root]
+        return [self.path_root, self.record_types]
 
 
 #------------------------------------------------------------------------------

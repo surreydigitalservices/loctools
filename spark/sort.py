@@ -20,17 +20,13 @@ FIELD_TYPES_MAP = {
     'time': TimestampType,
 }
 
-# RECORD_TYPES_TO_SORT = ['21', '24', '28']
-RECORD_TYPES_TO_SORT = ['24']
-
-
 
 class UPRNRecordSort:
-    def __init__(self, sc, path_root):
+    def __init__(self, sc, path_root, record_types):
         self.sc = sc
-        # self.conf = conf
         self.schema_data = yaml.load(open(SCHEMA_FILE, 'r'))
         self.path_root = path_root
+        self.record_types = record_types
         self.sqlContext = SQLContext(sc)
 
     def get_schema(self, rec_id):
@@ -42,7 +38,7 @@ class UPRNRecordSort:
         return StructType(fields)
 
     def run(self):
-        for record_type in RECORD_TYPES_TO_SORT:
+        for record_type in self.record_types:
             ab_schema = self.get_schema(record_type)
             record_type_name = self.schema_data[record_type]['name']
 
@@ -60,6 +56,10 @@ class UPRNRecordSort:
 
 if __name__ == "__main__":
     sc   = SparkContext()
-    merge = UPRNRecordSort(sc, sys.argv[1])
+    path_root = sys.argv[1]
+    # Assume the record types is a comma-separated list of type numbers
+    record_types = sys.argv[2].split(',')
+    record_types = map(str.strip, record_types)
+    merge = UPRNRecordSort(sc, path_root, record_types)
     merge.run()
 
