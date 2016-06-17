@@ -3,237 +3,449 @@
   id: 10
   name: Header
   schema:
-    - RECORD_IDENTIFIER
-    - CUSTODIAN_NAME
-    - LOCAL_CUSTODIAN_NAME
-    - PROCESS_DATE
-    - VOLUME_NUMBER
-    - ENTRY_DATE
-    - TIME_STAMP
-    - VERSION
-    - FILE_TYPE
+    fields:
+      - name: RECORD_IDENTIFIER
+        type: integer
+      - name: CUSTODIAN_NAME
+        type: string
+      - name: LOCAL_CUSTODIAN_CODE
+        type: integer
+      - name: PROCESS_DATE
+        type: date
+      - name: VOLUME_NUMBER
+        type: integer
+      - name: ENTRY_DATE
+        type: date
+      - name: TIME_STAMP
+        type: time
+      - name: VERSION
+        type: string
+      - name: FILE_TYPE
+        type: string
 "11":
   id: 11
   name: Street
   schema:
-    - RECORD_IDENTIFIER
-    - CHANGE_TYPE
-    - PRO_ORDER
-    - USRN
-    - RECORD_TYPE
-    - SWA_ORG_REF_NAMING
-    - STATE
-    - STATE_DATE
-    - STREET_SURFACE
-    - STREET_CLASSIFICATION
-    - VERSION
-    - STREET_START_DATE
-    - STREET_END_DATE
-    - LAST_UPDATE_DATE
-    - RECORD_ENTRY_DATE
-    - STREET_START_X
-    - STREET_START_Y
-    - STREET_START_LAT
-    - STREET_START_LONG
-    - STREET_END_X
-    - STREET_END_Y
-    - STREET_END_LAT
-    - STREET_END_LONG
-    - STREET_TOLERANCE
+    primaryKey: USRN
+    fields:
+      - name: RECORD_IDENTIFIER
+        type: integer
+      - name: CHANGE_TYPE
+        type: string
+      - name: PRO_ORDER
+        type: integer
+      - name: USRN
+        type: long
+      - name: RECORD_TYPE
+        type: string
+      - name: SWA_ORG_REF_NAMING
+        type: integer
+      - name: STATE
+        type: string
+      - name: STATE_DATE
+        type: date
+      - name: STREET_SURFACE
+        type: string
+      - name: STREET_CLASSIFICATION
+        type: string
+      - name: VERSION
+        type: integer
+      - name: STREET_START_DATE
+        type: date
+      - name: STREET_END_DATE
+        type: date
+      - name: LAST_UPDATE_DATE
+        type: date
+      - name: RECORD_ENTRY_DATE
+        type: date
+      - name: STREET_START_X
+        type: number
+      - name: STREET_START_Y
+        type: number
+      - name: STREET_START_LAT
+        type: number
+      - name: STREET_START_LONG
+        type: number
+      - name: STREET_END_X
+        type: number
+      - name: STREET_END_Y
+        type: number
+      - name: STREET_END_LAT
+        type: number
+      - name: STREET_END_LONG
+        type: number
+      - name: STREET_TOLERANCE
+        type: integer
 "15":
   id: 15
   name: StreetDescriptor
   schema:
-    - RECORD_IDENTIFIER
-    - CHANGE_TYPE
-    - PRO_ORDER
-    - USRN
-    - STREET_DESCRIPTION
-    - LOCALITY
-    - TOWN_NAME
-    - ADMINISTRATIVE_AREA
-    - LANGUAGE
-    - START_DATE
-    - END_DATE
-    - LAST_UPDATE_DATE
-    - ENTRY_DATE
+    primaryKey: USRN
+    fields:
+      - name: RECORD_IDENTIFIER
+        type: integer
+      - name: CHANGE_TYPE
+        type: string
+      - name: PRO_ORDER
+        type: integer
+      - name: USRN
+        type: long
+      - name: STREET_DESCRIPTION
+        type: string
+      - name: LOCALITY
+        type: string
+      - name: TOWN_NAME
+        type: string
+      - name: ADMINISTRATIVE_AREA
+        type: string
+      - name: LANGUAGE
+        type: string
+      - name: START_DATE
+        type: date
+      - name: END_DATE
+        type: date
+      - name: LAST_UPDATE_DATE
+        type: date
+      - name: ENTRY_DATE
+        type: date
 "21":
   id: 21
   name: BPLU
   schema:
-    - RECORD_IDENTIFIER
-    - CHANGE_TYPE
-    - PRO_ORDER
-    - UPRN
-    - LOGICAL_STATUS
-    - BLPU_STATE
-    - BLPU_STATE_DATE
-    - PARENT_UPRN
-    - X_COORDINATE
-    - Y_COORDINATE
-    - LATITUDE
-    - LONGITUDE
-    - RPC
-    - LOCAL_CUSTODIAN_CODE
-    - COUNTRY
-    - START_DATE
-    - END_DATE
-    - LAST_UPDATE_DATE
-    - ENTRY_DATE
-    - ADDRESSBASE_POSTAL
-    - POSTCODE_LOCATOR
-    - MULTI_OCC_COUNT
+    primaryKey: UPRN
+    fields:
+      - name: RECORD_IDENTIFIER
+        type: integer
+      - name: CHANGE_TYPE
+        type: string
+      - name: PRO_ORDER
+        type: integer
+      - name: UPRN
+        type: long
+      - name: LOGICAL_STATUS
+        type: string
+      - name: BLPU_STATE
+        type: string
+      - name: BLPU_STATE_DATE
+        type: date
+      - name: PARENT_UPRN
+        type: long
+      - name: X_COORDINATE
+        type: number
+      - name: Y_COORDINATE
+        type: number
+      - name: LATITUDE
+        type: number
+      - name: LONGITUDE
+        type: number
+      - name: RPC
+        type: string
+      - name: LOCAL_CUSTODIAN_CODE
+        type: integer
+      - name: COUNTRY
+        type: string
+      - name: START_DATE
+        type: date
+      - name: END_DATE
+        type: date
+      - name: LAST_UPDATE_DATE
+        type: date
+      - name: ENTRY_DATE
+        type: date
+      - name: ADDRESSBASE_POSTAL
+        type: string
+      - name: POSTCODE_LOCATOR
+        type: string
+      - name: MULTI_OCC_COUNT
+        type: integer
 "23":
   id: 23
   name: ApplicationCrossReference
   schema:
-    - RECORD_IDENTIFIER
-    - CHANGE_TYPE
-    - PRO_ORDER
-    - UPRN
-    - XREF_KEY
-    - CROSS_REFERENCE
-    - VERSION
-    - SOURCE
-    - START_DATE
-    - END_DATE
-    - LAST_UPDATE_DATE
-    - ENTRY_DATE
+    primaryKey:
+    fields:
+      - name: RECORD_IDENTIFIER
+        type: integer
+      - name: CHANGE_TYPE
+        type: string
+      - name: PRO_ORDER
+        type: integer
+      - name: UPRN
+        type: long
+      - name: XREF_KEY
+        type: string
+      - name: CROSS_REFERENCE
+        type: string
+      - name: VERSION
+        type: integer
+      - name: SOURCE
+        type: string
+      - name: START_DATE
+        type: date
+      - name: END_DATE
+        type: date
+      - name: LAST_UPDATE_DATE
+        type: date
+      - name: ENTRY_DATE
+        type: date
 "24":
   id: 24
   name: LPI
   schema:
-    - RECORD_IDENTIFIER
-    - CHANGE_TYPE
-    - PRO_ORDER
-    - UPRN
-    - LPI_KEY
-    - LANGUAGE
-    - LOGICAL_STATUS
-    - START_DATE
-    - END_DATE
-    - LAST_UPDATE_DATE
-    - ENTRY_DATE
-    - SAO_START_NUMBER
-    - SAO_START_SUFFIX
-    - SAO_END_NUMBER
-    - SAO_END_SUFFIX
-    - SAO_TEXT
-    - PAO_START_NUMBER
-    - PAO_START_SUFFIX
-    - PAO_END_NUMBER
-    - PAO_END_SUFFIX
-    - PAO_TEXT
-    - USRN
-    - USRN_MATCH_INDICATOR
-    - AREA_NAME
-    - LEVEL
-    - OFFICIAL_FLAG
+    primaryKey:
+    fields:
+      - name: RECORD_IDENTIFIER
+        type: integer
+      - name: CHANGE_TYPE
+        type: string
+      - name: PRO_ORDER
+        type: integer
+      - name: UPRN
+        type: long
+      - name: LPI_KEY
+        type: string
+      - name: LANGUAGE
+        type: string
+      - name: LOGICAL_STATUS
+        type: string
+      - name: START_DATE
+        type: date
+      - name: END_DATE
+        type: date
+      - name: LAST_UPDATE_DATE
+        type: date
+      - name: ENTRY_DATE
+        type: date
+      - name: SAO_START_NUMBER
+        type: integer
+      - name: SAO_START_SUFFIX
+        type: string
+      - name: SAO_END_NUMBER
+        type: integer
+      - name: SAO_END_SUFFIX
+        type: string
+      - name: SAO_TEXT
+        type: string
+      - name: PAO_START_NUMBER
+        type: integer
+      - name: PAO_START_SUFFIX
+        type: string
+      - name: PAO_END_NUMBER
+        type: integer
+      - name: PAO_END_SUFFIX
+        type: string
+      - name: PAO_TEXT
+        type: string
+      - name: USRN
+        type: long
+      - name: USRN_MATCH_INDICATOR
+        type: string
+      - name: AREA_NAME
+        type: string
+      - name: LEVEL
+        type: string
+      - name: OFFICIAL_FLAG
+        type: string
 "28":
   id: 28
   name: DeliveryPointAddress
   schema:
-    - RECORD_IDENTIFIER
-    - CHANGE_TYPE
-    - PRO_ORDER
-    - UPRN
-    - UDPRN
-    - ORGANISATION_NAME
-    - DEPARTMENT_NAME
-    - SUB_BUILDING_NAME
-    - BUILDING_NAME
-    - BUILDING_NUMBER
-    - DEPENDENT_THOROUGHFARE
-    - THOROUGHFARE
-    - DOUBLE_DEPENDENT_LOCALITY
-    - DEPENDENT_LOCALITY
-    - POST_TOWN
-    - POSTCODE
-    - POSTCODE_TYPE
-    - DELIVERY_POINT_SUFFIX
-    - WELSH_DEPENDENT_THOROUGHFARE
-    - WELSH_THOROUGHFARE
-    - WELSH_DOUBLE_DEPENDENT_LOCALITY
-    - WELSH_DEPENDENT_LOCALITY
-    - WELSH_POST_TOWN
-    - PO_BOX_NUMBER
-    - PROCESS_DATE
-    - START_DATE
-    - END_DATE
-    - LAST_UPDATE_DATE
-    - ENTRY_DATE
+    primaryKey:
+    fields:
+      - name: RECORD_IDENTIFIER
+        type: integer
+      - name: CHANGE_TYPE
+        type: string
+      - name: PRO_ORDER
+        type: integer
+      - name: UPRN
+        type: long
+      - name: UDPRN
+        type: integer
+      - name: ORGANISATION_NAME
+        type: string
+      - name: DEPARTMENT_NAME
+        type: string
+      - name: SUB_BUILDING_NAME
+        type: string
+      - name: BUILDING_NAME
+        type: string
+      - name: BUILDING_NUMBER
+        type: integer
+      - name: DEPENDENT_THOROUGHFARE
+        type: string
+      - name: THOROUGHFARE
+        type: string
+      - name: DOUBLE_DEPENDENT_LOCALITY
+        type: string
+      - name: DEPENDENT_LOCALITY
+        type: string
+      - name: POST_TOWN
+        type: string
+      - name: POSTCODE
+        type: string
+      - name: POSTCODE_TYPE
+        type: string
+      - name: DELIVERY_POINT_SUFFIX
+        type: string
+      - name: WELSH_DEPENDENT_THOROUGHFARE
+        type: string
+      - name: WELSH_THOROUGHFARE
+        type: string
+      - name: WELSH_DOUBLE_DEPENDENT_LOCALITY
+        type: string
+      - name: WELSH_DEPENDENT_LOCALITY
+        type: string
+      - name: WELSH_POST_TOWN
+        type: string
+      - name: PO_BOX_NUMBER
+        type: string
+      - name: PROCESS_DATE
+        type: date
+      - name: START_DATE
+        type: date
+      - name: END_DATE
+        type: date
+      - name: LAST_UPDATE_DATE
+        type: date
+      - name: ENTRY_DATE
+        type: date
 "29":
   id: 29
   name: Metadata
   schema:
-    - RECORD_IDENTIFIER
-    - GAZ_NAME
-    - GAZ_SCOPE
-    - TER_OF_USE
-    - LINKED_DATA
-    - GAZ_OWNER
-    - NGAZ_FREQ
-    - CUSTODIAN_NAME
-    - CUSTODIAN_UPRN
-    - LOCAL_CUSTODIAN_CODE
-    - CO_ORD_SYSTEM
-    - CO_ORD_UNIT
-    - META_DATE
-    - CLASS_SCHEME
-    - GAZ_DATE
-    - LANGUAGE
-    - CHARACTER_SET
+    primaryKey:
+    fields:
+      - name: RECORD_IDENTIFIER
+        type: integer
+      - name: GAZ_NAME
+        type: string
+      - name: GAZ_SCOPE
+        type: string
+      - name: TER_OF_USE
+        type: string
+      - name: LINKED_DATA
+        type: string
+      - name: GAZ_OWNER
+        type: string
+      - name: NGAZ_FREQ
+        type: string
+      - name: CUSTODIAN_NAME
+        type: string
+      - name: CUSTODIAN_UPRN
+        type: long
+      - name: LOCAL_CUSTODIAN_CODE
+        type: integer
+      - name: CO_ORD_SYSTEM
+        type: string
+      - name: CO_ORD_UNIT
+        type: string
+      - name: META_DATE
+        type: date
+      - name: CLASS_SCHEME
+        type: string
+      - name: GAZ_DATE
+        type: date
+      - name: LANGUAGE
+        type: string
+      - name: CHARACTER_SET
+        type: string
 "30":
   id: 30
   name: SuccessorRecord
   schema:
-    - RECORD_IDENTIFIER
-    - CHANGE_TYPE
-    - PRO_ORDER
-    - UPRN
-    - SUCC_KEY
-    - START_DATE
-    - END_DATE
-    - LAST_UPDATE_DATE
-    - ENTRY_DATE
-    - SUCCESSOR
+    primaryKey:
+    fields:
+      - name: RECORD_IDENTIFIER
+        type: integer
+      - name: CHANGE_TYPE
+        type: string
+      - name: PRO_ORDER
+        type: integer
+      - name: UPRN
+        type: long
+      - name: SUCC_KEY
+        type: string
+      - name: START_DATE
+        type: date
+      - name: END_DATE
+        type: date
+      - name: LAST_UPDATE_DATE
+        type: date
+      - name: ENTRY_DATE
+        type: date
+      - name: SUCCESSOR
+        type: integer
 "31":
   id: 31
   name: Organisation
   schema:
-    - RECORD_IDENTIFIER
-    - CHANGE_TYPE
-    - PRO_ORDER
-    - UPRN
-    - ORG_KEY
-    - ORGANISATION
-    - LEGAL_NAME
-    - START_DATE
-    - END_DATE
-    - LAST_UPDATE_DATE
-    - ENTRY_DATE
+    primaryKey: ORG_KEY
+    fields:
+      - name: RECORD_IDENTIFIER
+        type: integer
+      - name: CHANGE_TYPE
+        type: string
+      - name: PRO_ORDER
+        type: integer
+      - name: UPRN
+        type: long
+      - name: ORG_KEY
+        type: string
+      - name: ORGANISATION
+        type: string
+      - name: LEGAL_NAME
+        type: string
+      - name: START_DATE
+        type: date
+      - name: END_DATE
+        type: date
+      - name: LAST_UPDATE_DATE
+        type: date
+      - name: ENTRY_DATE
+        type: date
 "32":
   id: 32
   name: Classification
   schema:
-    - RECORD_IDENTIFIER
-    - CHANGE_TYPE
-    - PRO_ORDER
-    - UPRN
-    - CLASS_KEY
-    - CLASSIFICATION_CODE
-    - CLASS_SCHEME
-    - SCHEME_VERSION
-    - START_DATE
-    - END_DATE
-    - LAST_UPDATE_DATE
-    - ENTRY_DATE
+    primaryKey: CLASS_KEY
+    fields:
+      - name: RECORD_IDENTIFIER
+        type: integer
+      - name: CHANGE_TYPE
+        type: string
+      - name: PRO_ORDER
+        type: integer
+      - name: UPRN
+        type: long
+      - name: CLASS_KEY
+        type: string
+      - name: CLASSIFICATION_CODE
+        type: string
+      - name: CLASS_SCHEME
+        type: string
+      - name: SCHEME_VERSION
+        type: number
+      - name: START_DATE
+        type: date
+      - name: END_DATE
+        type: date
+      - name: LAST_UPDATE_DATE
+        type: date
+      - name: ENTRY_DATE
+        type: date
 "99":
   id: 99
   name: Trailer
   schema:
-    - RECORD_IDENTIFIER
-    - NEXT_VOLUME_NUMBER
-    - RECORD_COUNT
-    - ENTRY_DATE
-    - TIME_STAMP
+    fields:
+      - name: RECORD_IDENTIFIER
+        type: integer
+      - name: NEXT_VOLUME_NUMBER
+        type: integer
+      - name: RECORD_COUNT
+        type: integer
+      - name: ENTRY_DATE
+        type: date
+      - name: TIME_STAMP
+        type: time
