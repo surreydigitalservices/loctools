@@ -2,6 +2,7 @@ import csv
 import logging
 import luigi
 import luigi.s3
+import luigi.contrib.spark
 import operator
 import os
 from os import listdir
@@ -233,6 +234,24 @@ class MergeAllRecordsTask(luigi.Task):
 
 
 #------------------------------------------------------------------------------
+# Takes large Addressbase files containing single record types and sorts
+# the contents, outputting to folders.
+
+class UPRNRecordSortTask(luigi.contrib.spark.SparkSubmitTask):
+    """
+    """
+    name = "Sort UPRN Records"
+    app = 'spark/sort.py'
+    properties_file = "./spark/spark.conf"
+
+    schema_file = luigi.Parameter(default=addressbase().schema_file)
+    path_root = luigi.Parameter()
+
+    def app_options(self):
+        return [self.path_root]
+
+
+#------------------------------------------------------------------------------
 
 class AddressbaseRecordReader(object):
     """"""
@@ -372,19 +391,6 @@ class CombineByUSRNTask(luigi.Task):
                 file_count += 1
                 out = csv.writer(open(os.path.join('cache/grouped_records', "000{}.csv".format(file_count)), 'w'))
 
-
-
-
-
-
-# class SplitRecordsTask(luigi.Task):
-#     directory = luigi.Parameter()
-
-#     def requires(self):
-
-#     def output(self):
-
-#     def run(self):
 
 
 
