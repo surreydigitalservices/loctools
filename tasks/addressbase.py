@@ -21,7 +21,7 @@ RESULTS_COUNT_DIR = 'results/count/'
 class addressbase(luigi.Config):
     cache_dir = luigi.Parameter()
     directory = luigi.Parameter()
-    merge_dest = luigi.Parameter()
+    merged_dir = luigi.Parameter()
     schema_file = luigi.Parameter()
     location_records_filter = luigi.Parameter()
     include_headers = luigi.BoolParameter(default=False)
