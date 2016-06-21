@@ -22,6 +22,8 @@ class addressbase(luigi.Config):
     cache_dir = luigi.Parameter()
     directory = luigi.Parameter()
     merged_dir = luigi.Parameter()
+    usrn_grouped_dir = luigi.Parameter()
+    uprn_grouped_dir = luigi.Parameter()
     schema_file = luigi.Parameter()
     location_records_filter = luigi.Parameter()
     include_headers = luigi.BoolParameter(default=False)
@@ -275,7 +277,7 @@ class MergeAllRecordsTask(luigi.Task):
 # Takes large Addressbase files containing single record types and sorts
 # the contents, outputting to folders.
 
-class UPRNRecordSortTask(luigi.contrib.spark.SparkSubmitTask):
+class SortRecordsTask(luigi.contrib.spark.SparkSubmitTask):
     """
     """
     name = "Sort Records"
@@ -296,8 +298,7 @@ class UPRNRecordSortTask(luigi.contrib.spark.SparkSubmitTask):
 def convert_uprn(uprn):
     return long(uprn)
 
-def build_csv_part_path(parts, index):
-    path_root = reduce(lambda x, y: join(x, y), parts)
+def build_csv_part_path(path_root, index):
     name = 'part-{num:04d}.csv'.format(num=index)
     return join(path_root, name)
 
@@ -356,10 +357,8 @@ class AddressbaseRecordQuery(AddressbaseRecordReader):
         return matches
 
 
-class CombineByUPRNTask(luigi.Task):
-    directory = luigi.Parameter(default=addressbase().directory)
-    schema_file = luigi.Parameter(default=addressbase().schema_file)
-    location_records_filter = luigi.Parameter(default=addressbase().location_records_filter)
+class GroupByUPRNTask(luigi.Task):
+    uprn_grouped_dir = luigi.Parameter(default=addressbase().uprn_grouped_dir)
     aws_access_key_id = luigi.Parameter()
     aws_secret_access_key = luigi.Parameter()
     host = luigi.Parameter()
@@ -375,13 +374,12 @@ class CombineByUPRNTask(luigi.Task):
             path = self.s3_path + '/sorted-records/Addressbase_' + combine_type
             combine_queries.append(AddressbaseRecordQuery(s3, path))
 
-        merge_dir = 'cache/grouped-records'
-        if not os.path.exists(merge_dir):
-            os.makedirs(merge_dir)
+        if not os.path.exists(self.uprn_grouped_dir):
+            os.makedirs(self.uprn_grouped_dir)
 
         count = 0
         file_count = 0
-        out_path = build_csv_part_path(['cache', 'grouped-records'], file_count)
+        out_path = build_csv_part_path(self.uprn_grouped_dir, file_count)
         out = open(out_path, 'w')
         csvout = csv.writer(out)
         for row in blpu_reader.next_row():
@@ -400,16 +398,20 @@ class CombineByUPRNTask(luigi.Task):
             if count % 100000 == 0:
                 file_count += 1
                 out.close()
-                out_path = build_csv_part_path(['cache', 'grouped-records'], file_count)
+                out_path = build_csv_part_path(self.uprn_grouped_dir, file_count)
                 csvout = csv.writer(open(out_path, 'w'))
             # if count % 1000000 == 0:
             #     out.close()
             #     break
 
 
-class CombineByUSRNTask(luigi.Task):
-    directory = luigi.Parameter(default=addressbase().directory)
+class GroupByUSRNTask(luigi.Task):
+    """ Combines records with common USRN value.
+
+    As these are smaller, it doesnt require them to be sorted initially. """
+
     merged_dir = luigi.Parameter(default=addressbase().merged_dir)
+    usrn_grouped_dir = luigi.Parameter(default=addressbase().usrn_grouped_dir)
 
     def requires(self):
         tasks = []
@@ -418,18 +420,18 @@ class CombineByUSRNTask(luigi.Task):
             tasks.append(AddressbaseFile(join(self.merged_dir, dest_name)))
         return tasks
 
-    def read_input(self, index):
+    def _read_input(self, index):
         lines = self.input()[index].open('r').read().splitlines()
         data = list(csv.reader(lines))
         return sorted(data, key=operator.itemgetter(3))
 
     def run(self):
-        streets = self.read_input(0)
-        street_descriptors = self.read_input(1)
+        streets = self._read_input(0)
+        street_descriptors = self._read_input(1)
 
         index = 0
         file_count = 0
-        out = csv.writer(open(os.path.join('cache/grouped-street-records', '{num:03d}.csv'.format(num=file_count)), 'w'))
+        out = csv.writer(open(os.path.join(build_csv_part_path(self.usrn_grouped_dir, file_count)), 'w'))
         for row in streets:
             out.writerow(row)
             while int(street_descriptors[index][USRN_INDEX]) < int(row[USRN_INDEX]):
@@ -439,7 +441,7 @@ class CombineByUSRNTask(luigi.Task):
             index += 1
             if index % 50000 == 0:
                 file_count += 1
-                out = csv.writer(open(os.path.join('cache/grouped-street-records', "{num:03d}.csv".format(num=file_count)), 'w'))
+                out = csv.writer(open(os.path.join(build_csv_part_path(self.usrn_grouped_dir, file_count)), 'w'))
 
 
 
