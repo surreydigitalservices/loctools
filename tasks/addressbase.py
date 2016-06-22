@@ -12,17 +12,20 @@ from os import listdir
 from os.path import isfile, join
 import yaml
 
+# Use a copy of the luigi.contrib.ftp module with a couple of hacks and additions
+# to workaround some issues with OS FTP site.
 import tasks.luigi_ftp
 
 BUCKET = 'addressbase'
 USRN_INDEX = 3
 UPRN_INDEX = 3
-RESULTS_COUNT_DIR = 'results/count/'
 
 
 class addressbase(luigi.Config):
     cache_dir = luigi.Parameter()
-    directory = luigi.Parameter()
+    from_os_dir = luigi.Parameter()
+    from_os_csv_dir = luigi.Parameter()
+    count_dir = luigi.Parameter()
     merged_dir = luigi.Parameter()
     usrn_grouped_dir = luigi.Parameter()
     uprn_grouped_dir = luigi.Parameter()
@@ -110,6 +113,13 @@ class GetAllFTPFiles(luigi.WrapperTask):
 
 #------------------------------------------------------------------------------
 
+class UnzipFiles(luigi.contrib.external_program.ExternalProgramTask):
+    def program_args(self):
+        return ['unzip', 'cache/from-os/*', '-d', 'cache/from-os-csv']
+
+
+#------------------------------------------------------------------------------
+
 class GetS3File(luigi.Task):
     cache_dir = luigi.Parameter(default=addressbase().cache_dir)
     input_file = luigi.Parameter()
@@ -136,13 +146,14 @@ class GetS3File(luigi.Task):
 
 class CountRecords(luigi.Task):
     file_in = luigi.Parameter()
+    count_dir = luigi.Parameter(default=addressbase().count_dir)
 
     def requires(self):
         return AddressbaseFile(self.file_in)
 
     def output(self):
         filename = os.path.basename(self.file_in) + '.yml'
-        return luigi.LocalTarget(join(RESULTS_COUNT_DIR, filename))
+        return luigi.LocalTarget(join(self.count_dir, filename))
 
     def run(self):
         ids = {}
@@ -164,21 +175,22 @@ class CountAllRecords(luigi.Task):
     Lists all the files and how many record types are in each one.
     """
 
-    directory = luigi.Parameter()
+    from_os_csv_dir = luigi.Parameter(default=addressbase().from_os_csv_dir)
+    count_dir = luigi.Parameter(default=addressbase().count_dir)
 
     def requires(self):
-        csvfiles = [f for f in listdir(self.directory) if f.endswith('.csv')]
-        return [CountRecordsTask(file_in=join(self.directory, f)) for f in csvfiles]
+        files = [f for f in listdir(self.from_os_csv_dir) if (f.endswith('.csv') or f.endswith('.zip'))]
+        return [CountRecords(join(self.from_os_csv_dir, f)) for f in files]
 
     def output(self):
-        return luigi.LocalTarget(join(self.directory, 'manifest.yml'))
+        return luigi.LocalTarget(join(self.from_os_csv_dir, 'manifest.yml'))
 
     def run(self):
-        countfiles = [f for f in listdir(RESULTS_COUNT_DIR) if f.endswith('.yml')]
+        countfiles = [f for f in listdir(self.count_dir) if f.endswith('.yml')]
         manifest = []
 
         for cf in countfiles:
-            counts = yaml.load(open(join(RESULTS_COUNT_DIR, cf)))
+            counts = yaml.load(open(join(self.count_dir, cf)))
             config = {'name': cf[:-4], 'counts': counts}
             manifest.append(config)
 
@@ -189,19 +201,19 @@ class CountAllRecords(luigi.Task):
 #------------------------------------------------------------------------------
 
 class SplitRecords(luigi.Task):
-    directory = luigi.Parameter()
+    from_os_dir = luigi.Parameter()
     dest = luigi.Parameter()
     config = luigi.DictParameter()
     include_headers = luigi.BoolParameter(default=False)
 
     def requires(self):
-        return CountAllRecords(self.directory)
+        return CountAllRecords(self.from_os_dir)
 
     def output(self):
         return luigi.LocalTarget(join(self.dest, self.config['dest_name']))
 
     def run(self):
-        file_in = join(self.directory, self.config['name'])
+        file_in = join(self.from_os_dir, self.config['name'])
         lines = open(file_in).readlines()
         # Remove first and last two lines, as they are unused records
         lines = lines[1:-2]
@@ -218,12 +230,12 @@ class SplitRecords(luigi.Task):
 
 
 class SplitAllRecords(luigi.Task):
-    directory = luigi.Parameter(default=addressbase().directory)
+    from_os_dir = luigi.Parameter(default=addressbase().from_os_dir)
     schema_file = luigi.Parameter()
     location_records_filter = luigi.Parameter()
 
     def requires(self):
-        return CountAllRecords(self.directory)
+        return CountAllRecords(self.from_os_dir)
 
     def run(self):
         manifest = yaml.load(self.input().open('r'))
@@ -240,7 +252,7 @@ class SplitAllRecords(luigi.Task):
                 if k in records_filter:
                     config['schema'] = schema[k]
                     config['dest_name'] = config['name'].replace('.csv', '_r'+k+'.csv')
-                    yield SplitRecordsTask(directory=self.directory, config=config)
+                    yield SplitRecords(from_os_dir=self.from_os_dir, config=config)
 
 
 #------------------------------------------------------------------------------
@@ -249,48 +261,47 @@ class MergeRecords(luigi.Task):
     """ Merges records of a single type. """
 
     schema_file = luigi.Parameter(default=addressbase().schema_file)
-    directory = luigi.Parameter(default=addressbase().directory)
+    from_os_csv_dir = luigi.Parameter(default=addressbase().from_os_csv_dir)
     merged_dir = luigi.Parameter(default=addressbase().merged_dir)
     record_id = luigi.Parameter()
     include_headers = luigi.BoolParameter(default=False)
     addressbase_inputs = []
 
     def requires(self):
-        return CountAllRecordsTask(self.directory)
+        return CountAllRecords(self.from_os_csv_dir)
 
     def output(self):
         manifest = yaml.load(self.input().open('r'))
         schema_data = yaml.load(open(self.schema_file, 'r'))
         self.record_def = schema_data[self.record_id]
         dest_name = 'Addressbase_' + self.record_def['name'] + '.csv'
-        return luigi.LocalTarget(join(self.dest, dest_name))
+        return luigi.LocalTarget(join(self.merged_dir, dest_name))
 
-    def create_inputs(self):
+    def _create_inputs(self):
         manifest = yaml.load(self.input().open('r'))
         inputs = []
         for config in manifest:
             # Remove unwanted counts that are not important
             for num in ['10', '29', '99']:
-                del config['counts'][num]
+                if config['counts'].has_key(num):
+                    del config['counts'][num]
             if str(self.record_id) in config['counts'].keys():
-                file_target = join(self.directory, config['name'])
+                file_target = join(self.from_os_csv_dir, config['name'])
                 # print file_target
                 inputs.append({'path': file_target, 'mixed': config['counts'].keys() > 1})
         return inputs
 
-    def create_combined_output(self):
+    def _create_combined_output(self):
         with self.output().open('w') as out:
             if self.include_headers:
                 headers = ','.join(self.record_def['schema'])
                 out.write(headers + "\n")
 
             for file_in in self.addressbase_inputs:
-                # logging.debug('Reading input file: ' + file_in)
-                print('Reading input file: ' + file_in['path'])
+                logging.info('Reading input file: ' + file_in['path'])
                 lines = open(file_in['path'], 'r').readlines()
                 # Remove first and last two lines, as they are unused records
                 lines = lines[1:-2]
-                # TODO: improve speed
                 if file_in['mixed']:
                     for l in lines:
                         if l.startswith(str(self.record_id)):
@@ -300,21 +311,21 @@ class MergeRecords(luigi.Task):
                 out.flush()
 
     def run(self):
-        self.addressbase_inputs = self.create_inputs()
+        self.addressbase_inputs = self._create_inputs()
         # for t in self.inpuf_defs:
             # yield must occur inside run()!
             # target = yield AddressbaseFile(file_in=t)
             # self.addressbase_inputs.append(target)
-        self.create_combined_output()
+        self._create_combined_output()
 
 
 class MergeAllRecords(luigi.Task):
-    directory = luigi.Parameter(default=addressbase().directory)
+    from_os_csv_dir = luigi.Parameter(default=addressbase().from_os_csv_dir)
     schema_file = luigi.Parameter(default=addressbase().schema_file)
     location_records_filter = luigi.Parameter(default=addressbase().location_records_filter)
 
     def requires(self):
-        return CountAllRecordsTask(self.directory)
+        return CountAllRecords(self.from_os_csv_dir)
 
     def run(self):
         manifest = yaml.load(self.input().open('r'))
@@ -322,14 +333,14 @@ class MergeAllRecords(luigi.Task):
         records_filter = self.location_records_filter.split(',')
 
         for record_id in records_filter:
-            yield MergeRecordsTask(record_id=record_id)
+            yield MergeRecords(record_id=record_id)
 
 
 #------------------------------------------------------------------------------
 # Takes large Addressbase files containing single record types and sorts
 # the contents, outputting to folders.
 
-class SortRecordsTask(luigi.contrib.spark.SparkSubmitTask):
+class SortRecords(luigi.contrib.spark.SparkSubmitTask):
     """
     """
     name = "Sort Records"
