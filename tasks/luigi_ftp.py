@@ -128,16 +128,13 @@ class RemoteFileSystem(luigi.target.FileSystem):
 
     def _ftp_exists(self, path, mtime):
         path_parts = path.split('/')
-        path = '/'.join(path_parts[:-1])
+        path_dir = '/'.join(path_parts[:-1])
         fn = path_parts[-1]
 
-        files = self.conn.nlst(path)
-        print files
-        print fn
-        print path
+        files = self.conn.nlst(path_dir)
 
         exists = False
-        if fn in files:
+        if path in files:
             if mtime:
                 mdtm = self.conn.sendcmd('MDTM ' + path)
                 modified = datetime.datetime.strptime(mdtm[4:], "%Y%m%d%H%M%S")
@@ -232,6 +229,15 @@ class RemoteFileSystem(luigi.target.FileSystem):
             ftp.rmd(path)
         except ftplib.all_errors as e:
             print('_rm_recursive: Could not remove {0}: {1}'.format(path, e))
+
+    def listdir(self, path):
+        self._connect()
+
+        files_list = self.conn.nlst(path)
+
+        self._close()
+
+        return files_list
 
     def put(self, local_path, path, atomic=True):
         """
@@ -396,7 +402,6 @@ class RemoteTarget(luigi.target.FileSystemTarget):
             raise Exception('mode must be r/w')
 
     def exists(self):
-        print "RemoteTarget::exists"
         return self.fs.exists(self.path, self.mtime)
 
     def put(self, local_path, atomic=True):

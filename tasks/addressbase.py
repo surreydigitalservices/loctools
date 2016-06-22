@@ -4,6 +4,7 @@ import csv
 import logging
 import luigi
 import luigi.s3
+import luigi.contrib.ftp
 import luigi.contrib.spark
 import operator
 import os
@@ -11,6 +12,7 @@ from os import listdir
 from os.path import isfile, join
 import yaml
 
+import tasks.luigi_ftp
 
 BUCKET = 'addressbase'
 USRN_INDEX = 3
@@ -44,6 +46,21 @@ class AddressbaseFile(luigi.ExternalTask):
             return luigi.LocalTarget(self.file_path, format=luigi.format.Gzip)
 
 
+# TODO: this doesnt work as OS FTP server returns full paths, not just
+# filenames. So name does not match and luigi cannot find the remote file.
+class FTPFile(luigi.ExternalTask):
+    path = luigi.Parameter()
+    host = luigi.Parameter()
+    username = luigi.Parameter()
+    password = luigi.Parameter()
+    # cache_dir = luigi.Parameter(default=addressbase().cache_dir)
+
+    def output(self):
+        # return luigi.contrib.ftp.RemoteTarget(self.path, self.host,
+        return tasks.luigi_ftp.RemoteTarget(self.path, self.host,
+                        username=self.username, password=self.password)
+
+
 class AddressbaseS3File(luigi.ExternalTask):
     """ A source Addressbase file on S3.
 
@@ -58,7 +75,42 @@ class AddressbaseS3File(luigi.ExternalTask):
 
 #------------------------------------------------------------------------------
 
-class DownloadS3File(luigi.Task):
+class GetFTPFile(luigi.Task):
+    path = luigi.Parameter()
+    host = luigi.Parameter()
+    username = luigi.Parameter()
+    password = luigi.Parameter()
+    local_path = luigi.Parameter()
+
+    def requires(self):
+        return FTPFile(self.path, self.host, self.username, self.password)
+
+    def output(self):
+        name = os.path.basename(self.path)
+        self.output_path = join(self.local_path, name)
+        return luigi.LocalTarget(self.output_path)
+
+    def run(self):
+        ftp_in = self.input()
+        ftp_in.get(self.output_path)
+
+
+class GetAllFTPFiles(luigi.WrapperTask):
+    path = luigi.Parameter()
+    host = luigi.Parameter()
+    username = luigi.Parameter()
+    password = luigi.Parameter()
+    local_path = luigi.Parameter()
+
+    def requires(self):
+        fs = tasks.luigi_ftp.RemoteFileSystem(self.host, self.username, self.password)
+        files = fs.listdir(self.path)
+        return [GetFTPFile(f, self.host, self.username, self.password, self.local_path) for f in files]
+
+
+#------------------------------------------------------------------------------
+
+class GetS3File(luigi.Task):
     cache_dir = luigi.Parameter(default=addressbase().cache_dir)
     input_file = luigi.Parameter()
     output_file = luigi.Parameter()
@@ -82,7 +134,7 @@ class DownloadS3File(luigi.Task):
 
 #------------------------------------------------------------------------------
 
-class CountRecordsTask(luigi.Task):
+class CountRecords(luigi.Task):
     file_in = luigi.Parameter()
 
     def requires(self):
@@ -106,7 +158,7 @@ class CountRecordsTask(luigi.Task):
             out.write(yaml.dump(ids, default_flow_style=False))
 
 
-class CountAllRecordsTask(luigi.Task):
+class CountAllRecords(luigi.Task):
     """ Creates a manifest of the Addressbase files.
 
     Lists all the files and how many record types are in each one.
@@ -136,14 +188,14 @@ class CountAllRecordsTask(luigi.Task):
 
 #------------------------------------------------------------------------------
 
-class SplitRecordsTask(luigi.Task):
+class SplitRecords(luigi.Task):
     directory = luigi.Parameter()
     dest = luigi.Parameter()
     config = luigi.DictParameter()
     include_headers = luigi.BoolParameter(default=False)
 
     def requires(self):
-        return CountAllRecordsTask(self.directory)
+        return CountAllRecords(self.directory)
 
     def output(self):
         return luigi.LocalTarget(join(self.dest, self.config['dest_name']))
@@ -165,13 +217,13 @@ class SplitRecordsTask(luigi.Task):
                     out.write(l)
 
 
-class SplitAllRecordsTask(luigi.Task):
+class SplitAllRecords(luigi.Task):
     directory = luigi.Parameter(default=addressbase().directory)
     schema_file = luigi.Parameter()
     location_records_filter = luigi.Parameter()
 
     def requires(self):
-        return CountAllRecordsTask(self.directory)
+        return CountAllRecords(self.directory)
 
     def run(self):
         manifest = yaml.load(self.input().open('r'))
@@ -193,7 +245,7 @@ class SplitAllRecordsTask(luigi.Task):
 
 #------------------------------------------------------------------------------
 
-class MergeRecordsTask(luigi.Task):
+class MergeRecords(luigi.Task):
     """ Merges records of a single type. """
 
     schema_file = luigi.Parameter(default=addressbase().schema_file)
@@ -256,7 +308,7 @@ class MergeRecordsTask(luigi.Task):
         self.create_combined_output()
 
 
-class MergeAllRecordsTask(luigi.Task):
+class MergeAllRecords(luigi.Task):
     directory = luigi.Parameter(default=addressbase().directory)
     schema_file = luigi.Parameter(default=addressbase().schema_file)
     location_records_filter = luigi.Parameter(default=addressbase().location_records_filter)
@@ -357,7 +409,7 @@ class AddressbaseRecordQuery(AddressbaseRecordReader):
         return matches
 
 
-class GroupByUPRNTask(luigi.Task):
+class GroupByUPRN(luigi.Task):
     uprn_grouped_dir = luigi.Parameter(default=addressbase().uprn_grouped_dir)
     aws_access_key_id = luigi.Parameter()
     aws_secret_access_key = luigi.Parameter()
@@ -405,7 +457,7 @@ class GroupByUPRNTask(luigi.Task):
             #     break
 
 
-class GroupByUSRNTask(luigi.Task):
+class GroupByUSRN(luigi.Task):
     """ Combines records with common USRN value.
 
     As these are smaller, it doesnt require them to be sorted initially. """
