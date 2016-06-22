@@ -46,7 +46,7 @@ class RecordSort:
             ab_schema = self.get_schema(record_type)
             record_type_name = self.schema_data[record_type]['name']
 
-            ab_file = self.path_root + "/records/Addressbase_{0}.csv".format(record_type_name)
+            ab_file = self.path_root + "/merged-records/Addressbase_{0}.csv".format(record_type_name)
             ab_df = self.sqlContext.read.format('com.databricks.spark.csv').schema(ab_schema).load(ab_file)
 
             # Always sort by UPRN as that is the constant key across all property record types
