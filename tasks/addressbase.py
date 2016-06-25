@@ -27,6 +27,7 @@ class addressbase(luigi.Config):
     from_os_csv_dir = luigi.Parameter()
     count_dir = luigi.Parameter()
     merged_dir = luigi.Parameter()
+    sorted_dir = luigi.Parameter()
     usrn_grouped_dir = luigi.Parameter()
     uprn_grouped_dir = luigi.Parameter()
     schema_file = luigi.Parameter()
@@ -114,6 +115,8 @@ class GetAllFTPFiles(luigi.WrapperTask):
 #------------------------------------------------------------------------------
 
 class UnzipFiles(luigi.contrib.external_program.ExternalProgramTask):
+    from_os_dir = luigi.Parameter(default=addressbase().from_os_dir)
+
     def program_args(self):
         return ['unzip', 'cache/from-os/*', '-d', 'cache/from-os-csv']
 
@@ -368,18 +371,17 @@ def build_csv_part_path(path_root, index):
 UPRN_RECORD_TYPES = ['LPI', 'DeliveryPointAddress', 'Organisation', 'Classification']
 USRN_RECORD_TYPES = ['Street', 'StreetDescriptor']
 
-class AddressbaseRecordReader(object):
+class AddressbaseRecordS3Reader(object):
     """"""
     def __init__(self, s3client, s3_path):
         self.s3client = s3client
         self.s3_path = s3_path
         self.files = [f for f in s3client.list(s3_path) if f.startswith('part')]
-        # print self.files
         self.file_index = 0
 
     def _get_next_file_data(self):
         path = self.s3_path + '/' + self.files[self.file_index]
-        print 'Downloading file: ' + path
+        logging.info('Downloading file: ' + path)
         key = self.s3client.get_key(path)
         f = luigi.s3.ReadableS3File(key)
         self.csvdata = f.read().splitlines()
@@ -393,9 +395,36 @@ class AddressbaseRecordReader(object):
                 yield row
 
 
+class AddressbaseRecordReader(object):
+    """"""
+    def __init__(self, sorted_files_path):
+        self.sorted_files_path = sorted_files_path
+        sorted_files = sorted(listdir(sorted_files_path))
+        self.files = [f for f in sorted_files if f.startswith('part')]
+        self.file_index = 0
+
+    def _get_next_file_data(self):
+        if self.file_index < len(self.files):
+            path = join(self.sorted_files_path, self.files[self.file_index])
+            logging.info('Reading file: ' + path)
+            f = open(path, 'r')
+            self.csvdata = f.read().splitlines()
+            f.close()
+            self.file_index += 1
+            return True
+        return False
+
+    def next_row(self):
+        for file_part in self.files:
+            if self._get_next_file_data():
+                csvreader = csv.reader(self.csvdata)
+                for row in csvreader:
+                    yield row
+
+
 class AddressbaseRecordQuery(AddressbaseRecordReader):
-    def __init__(self, s3client, s3_path):
-        super(AddressbaseRecordQuery, self).__init__(s3client, s3_path)
+    def __init__(self, path):
+        super(AddressbaseRecordQuery, self).__init__(path)
         self.end_uprn = -1
 
     def parse_csv_data(self):
@@ -404,12 +433,14 @@ class AddressbaseRecordQuery(AddressbaseRecordReader):
         self.start_uprn = convert_uprn(self.data[0][UPRN_INDEX])
         self.end_uprn = convert_uprn(self.data[-1][UPRN_INDEX])
         self.row_index = 0
-        print "start = {}, end = {}".format(self.start_uprn, self.end_uprn)
+        logging.info("start = {}, end = {}".format(self.start_uprn, self.end_uprn))
 
     def rows_by_uprn(self, uprn):
-        while uprn > self.end_uprn:
-            self._get_next_file_data()
-            self.parse_csv_data()
+        more_data = True
+        while uprn > self.end_uprn and more_data:
+            more_data = self._get_next_file_data()
+            if more_data:
+                self.parse_csv_data()
 
         while self.row_index < len(self.data) and uprn < convert_uprn(self.data[self.row_index][UPRN_INDEX]):
             self.row_index += 1
@@ -422,20 +453,16 @@ class AddressbaseRecordQuery(AddressbaseRecordReader):
 
 class GroupByUPRN(luigi.Task):
     uprn_grouped_dir = luigi.Parameter(default=addressbase().uprn_grouped_dir)
-    aws_access_key_id = luigi.Parameter()
-    aws_secret_access_key = luigi.Parameter()
-    host = luigi.Parameter()
-    s3_path = luigi.Parameter()
+    sorted_dir = luigi.Parameter(default=addressbase().sorted_dir)
 
     def run(self):
-        s3 = luigi.s3.S3Client(self.aws_access_key_id, self.aws_secret_access_key, host=self.host)
-        path = self.s3_path + '/sorted-records/Addressbase_BPLU'
-        blpu_reader = AddressbaseRecordReader(s3, path)
+        blpu_path = join(self.sorted_dir, 'Addressbase_BPLU')
+        blpu_reader = AddressbaseRecordReader(blpu_path)
 
         combine_queries = []
         for combine_type in UPRN_RECORD_TYPES:
-            path = self.s3_path + '/sorted-records/Addressbase_' + combine_type
-            combine_queries.append(AddressbaseRecordQuery(s3, path))
+            path = join(self.sorted_dir, 'Addressbase_' + combine_type)
+            combine_queries.append(AddressbaseRecordQuery(path))
 
         if not os.path.exists(self.uprn_grouped_dir):
             os.makedirs(self.uprn_grouped_dir)
@@ -448,7 +475,6 @@ class GroupByUPRN(luigi.Task):
         for row in blpu_reader.next_row():
             uprn = convert_uprn(row[UPRN_INDEX])
             row[UPRN_INDEX] = uprn
-            # print 'Combining UPRN: ' + str(uprn)
             csvout.writerow(row)
 
             # Add related rows of other record types
@@ -492,6 +518,9 @@ class GroupByUSRN(luigi.Task):
         streets = self._read_input(0)
         street_descriptors = self._read_input(1)
 
+        if not os.path.exists(self.usrn_grouped_dir):
+            os.makedirs(self.usrn_grouped_dir)
+
         index = 0
         file_count = 0
         out = csv.writer(open(os.path.join(build_csv_part_path(self.usrn_grouped_dir, file_count)), 'w'))
@@ -505,9 +534,5 @@ class GroupByUSRN(luigi.Task):
             if index % 50000 == 0:
                 file_count += 1
                 out = csv.writer(open(os.path.join(build_csv_part_path(self.usrn_grouped_dir, file_count)), 'w'))
-
-
-
-
 
 
