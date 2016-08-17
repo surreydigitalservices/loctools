@@ -1,3 +1,7 @@
+# loctools
+
+A [Luigi](https://github.com/spotify/luigi) project that defines data processing steps on Addressbase data drops.
+
 
 ## Setup
 
@@ -19,7 +23,16 @@ or run:
 `make init`
 
 
-### Tasks
+## Configuration
+
+Configuration settings are defined by:
+
+* `luigi.cfg` file
+* Via the command line, e.g. `--password abc123`
+
+See the [Luigi docs](https://luigi.readthedocs.io/en/stable/command_line.html) for more info.
+
+## Tasks
 
 **GetAllFTPFiles**
 
@@ -27,13 +40,19 @@ Downloads a set of files from an FTP site and stores them locally under `cache/f
 
 **CountAllRecords**
 
-Counts the record types in each file. Creates single manifest of results.
+Counts the record types in each file. Creates a single manifest of results.
 
 ```
 luigi --local-scheduler --module tasks.addressbase CountAllRecords
 ```
 
-**MergeRecords**
+**MergeAllRecords**
+
+Merges all records with the same type into single files.
+
+**SortRecords**
+
+Sorts the record data across multiple types into a series of files with related records (same UPRN/USRN) co-located.
 
 **GroupByUPRN, GroupByUSRN**
 
